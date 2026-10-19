@@ -1,0 +1,37 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: 单元测试
+        run: python -m unittest discover -s tests -t . -v
+
+      - name: CLI 冒烟
+        run: |
+          set -e
+          python -m ttt.cli new -o /tmp/demo.ttt --tag demo=1
+          python -m ttt.cli validate /tmp/demo.ttt
+          python -m ttt.cli inspect /tmp/demo.ttt
+          python -m ttt.cli extract /tmp/demo.ttt -C /tmp/out
+          echo "--- 篡改后必须失败 ---"
+          printf 'X' | dd of=/tmp/demo.ttt bs=1 seek=100 conv=notrunc 2>/dev/null
+          if python -m ttt.cli validate /tmp/demo.ttt; then
+            echo "篡改后仍然校验通过，测试无效"; exit 1
+          else
+            echo "篡改后按预期拒绝"
+          fi
